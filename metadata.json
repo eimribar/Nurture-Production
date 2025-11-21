@@ -1,0 +1,9 @@
+{
+  "name": "NurtureAI - Baby Cry Analyzer",
+  "description": "An intelligent parenting assistant that analyzes baby cries via video/audio to determine needs and provides actionable soothing steps using Gemini 2.5 models.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
