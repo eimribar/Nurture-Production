@@ -1,11 +1,11 @@
 # Environment files (set these in Vercel dashboard)
 .env
-.env.*
+.env.local
+.env.development
+.env.staging
+.env.production
 
 # Development files
-node_modules
-src
-*.ts
 *.map
 
 # Test files
