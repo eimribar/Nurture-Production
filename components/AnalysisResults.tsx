@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CryAnalysisResult, speakAdvice } from '../services/geminiService';
-import { Play, CheckCircle, AlertCircle, Activity } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { Play, CheckCircle, AlertCircle, Activity, Info } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface AnalysisResultsProps {
   result: CryAnalysisResult;
@@ -19,7 +19,6 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result }) => {
       const textToSpeak = `Here is the analysis. The primary reason seems to be ${result.primaryReason}. ${result.actionableSteps.join('. ')}`;
       const buffer = await speakAdvice(textToSpeak);
       
-      // Fix: Cast window to any to support webkitAudioContext for legacy Safari
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const source = ctx.createBufferSource();
       source.buffer = buffer;
@@ -53,15 +52,15 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result }) => {
           </div>
         </div>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Actionable Steps */}
-          <div>
+          <div className="order-2 lg:order-1">
             <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
               <CheckCircle className="text-green-500" /> Actionable Steps
             </h3>
             <ul className="space-y-3">
               {result.actionableSteps.map((step, idx) => (
-                <li key={idx} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <li key={idx} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 hover:bg-white hover:shadow-sm transition-all">
                   <span className="flex-shrink-0 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold mt-0.5">
                     {idx + 1}
                   </span>
@@ -71,30 +70,75 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result }) => {
             </ul>
           </div>
 
-          {/* Chart */}
-          <div className="h-64 md:h-auto min-h-[250px] relative">
-            <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2 absolute top-0 left-0 z-10">
-              <Activity className="text-secondary" /> Analysis Breakdown
-            </h3>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={result.chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {result.chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
+          {/* Chart & Context */}
+          <div className="order-1 lg:order-2 flex flex-col gap-4">
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 relative overflow-hidden">
+               <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 z-10 relative">
+                <Activity className="text-secondary w-5 h-5" /> Analysis Breakdown
+               </h3>
+               
+               <div className="flex flex-col sm:flex-row items-center gap-6 z-10 relative">
+                 {/* Donut Chart */}
+                 <div className="w-48 h-48 relative flex-shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={result.chartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          paddingAngle={4}
+                          dataKey="value"
+                          stroke="none"
+                          cornerRadius={4}
+                        >
+                          {result.chartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'white', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          itemStyle={{ color: '#1e293b', fontWeight: 600 }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Center Text */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-2xl font-bold text-slate-800">{result.confidenceScore}%</span>
+                        <span className="text-xs text-slate-400 uppercase font-semibold">Match</span>
+                    </div>
+                 </div>
+
+                 {/* Custom Legend */}
+                 <div className="flex-1 w-full">
+                   <div className="space-y-2">
+                      {result.chartData.map((entry, index) => (
+                        <div key={index} className="flex items-center justify-between group">
+                          <div className="flex items-center gap-2">
+                             <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                             <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">{entry.name}</span>
+                          </div>
+                          <span className="text-sm font-bold text-slate-600 group-hover:text-primary">{entry.value}%</span>
+                        </div>
+                      ))}
+                   </div>
+                 </div>
+               </div>
+               
+               {/* Analysis Context */}
+               {result.analysisContext && (
+                 <div className="mt-6 pt-4 border-t border-slate-200">
+                   <div className="flex gap-2 items-start text-sm text-slate-600 bg-white/50 p-3 rounded-lg">
+                     <Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                     <p className="leading-relaxed">{result.analysisContext}</p>
+                   </div>
+                 </div>
+               )}
+
+               {/* Decorative Background Blob */}
+               <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+            </div>
           </div>
         </div>
 

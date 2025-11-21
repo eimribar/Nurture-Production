@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type, Modality, LiveServerMessage } from "@google/genai";
 import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audioUtils';
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to get a fresh AI client instance
+const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Types ---
 export interface CryAnalysisResult {
@@ -11,6 +11,7 @@ export interface CryAnalysisResult {
   emotionalState: string;
   actionableSteps: string[];
   medicalDisclaimer: string;
+  analysisContext: string;
   chartData: { name: string; value: number }[];
 }
 
@@ -19,6 +20,7 @@ export const analyzeCryVideo = async (
   videoBase64: string,
   mimeType: string
 ): Promise<CryAnalysisResult> => {
+  const ai = getAiClient();
   const prompt = `
     Analyze this video of a crying baby. 
     Identify the likely cause of the cry (Hunger, Tiredness, Pain/Gas, Overstimulation, Diaper).
@@ -39,6 +41,10 @@ export const analyzeCryVideo = async (
         description: "List of 3-5 immediate steps for the parent to take"
       },
       medicalDisclaimer: { type: Type.STRING, description: "Standard medical disclaimer if signs of illness are present" },
+      analysisContext: { 
+        type: Type.STRING, 
+        description: "A brief, natural language explanation (max 2 sentences) of why the AI assigned these probabilities based on specific cues (e.g. 'The rhythmic nature of the cry suggests hunger, but the leg movements also indicate possible gas.')." 
+      },
       chartData: {
         type: Type.ARRAY,
         items: {
@@ -51,11 +57,10 @@ export const analyzeCryVideo = async (
         description: "Data for a chart showing probability of different causes (must sum to 100)"
       }
     },
-    required: ["primaryReason", "actionableSteps", "chartData"],
+    required: ["primaryReason", "actionableSteps", "chartData", "analysisContext"],
   };
 
   try {
-    // Switched to gemini-2.5-flash for reliability and to avoid 404 on preview models
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: {
@@ -87,7 +92,7 @@ export const analyzeCryVideo = async (
 
 // --- Quick Tips (Gemini 2.5 Flash) ---
 export const getQuickTips = async (): Promise<string> => {
-  // Switched to gemini-2.5-flash from invalid lite model name
+  const ai = getAiClient();
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: "Give me 3 universal, safe, and quick tips for soothing a crying baby immediately while I wait for detailed analysis. Keep it under 50 words.",
@@ -105,8 +110,8 @@ export const sendChatMessage = async (
   message: string, 
   history: ChatMessage[]
 ): Promise<{ text: string; sources?: any[] }> => {
+  const ai = getAiClient();
   try {
-    // Switched to gemini-2.5-flash for consistency
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: [
@@ -131,6 +136,7 @@ export const sendChatMessage = async (
 
 // --- Text to Speech (Gemini 2.5 Flash TTS) ---
 export const speakAdvice = async (text: string): Promise<AudioBuffer> => {
+  const ai = getAiClient();
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
     contents: [{ parts: [{ text: text }] }],
@@ -147,7 +153,6 @@ export const speakAdvice = async (text: string): Promise<AudioBuffer> => {
   const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   if (!base64Audio) throw new Error("No audio generated");
 
-  // Fix: Cast window to any to support webkitAudioContext for legacy Safari
   const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   return decodeAudioData(base64ToUint8Array(base64Audio), audioCtx, 24000);
 };
@@ -180,4 +185,8 @@ export const connectLiveParams = (
     };
 };
 
-export const getLiveClient = () => ai.live;
+// Helper to get the Live client from a fresh instance
+export const getLiveClient = () => {
+  const ai = getAiClient();
+  return ai.live;
+};

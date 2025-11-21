@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Mic, Keyboard, X, Zap, Activity, StopCircle } from 'lucide-react';
+import { Send, Sparkles, Mic, Keyboard, X, Zap, Activity, StopCircle, AlertCircle } from 'lucide-react';
 import { sendChatMessage, ChatMessage, getLiveClient, connectLiveParams } from '../services/geminiService';
 import { createPcmBlob, decodeAudioData, base64ToUint8Array } from '../utils/audioUtils';
 
@@ -18,6 +18,7 @@ const ChatAssistant: React.FC = () => {
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [liveStatus, setLiveStatus] = useState<'idle' | 'connecting' | 'connected'>('idle');
   const [volume, setVolume] = useState(0);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Refs for Voice
   const streamRef = useRef<MediaStream | null>(null);
@@ -26,6 +27,8 @@ const ChatAssistant: React.FC = () => {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const nextStartTimeRef = useRef<number>(0);
+  const activeSessionRef = useRef<any>(null); // Store the Live Session
+  const isLiveActiveRef = useRef(false); // Ref to track active state for callbacks
 
   // --- Text Logic ---
   const scrollToBottom = () => {
@@ -68,7 +71,7 @@ const ChatAssistant: React.FC = () => {
   useEffect(() => {
     let animId: number;
     const animate = () => {
-      if (isLiveActive && analyserRef.current) {
+      if (isLiveActiveRef.current && analyserRef.current) {
         const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
         analyserRef.current.getByteFrequencyData(dataArray);
         // Calculate average volume
@@ -78,94 +81,158 @@ const ChatAssistant: React.FC = () => {
         }
         const avg = sum / dataArray.length;
         setVolume(avg);
-      } else if (!isLiveActive) {
+      } else if (!isLiveActiveRef.current) {
         setVolume(0);
       }
       animId = requestAnimationFrame(animate);
     };
     animate();
     return () => cancelAnimationFrame(animId);
-  }, [isLiveActive]);
+  }, []); // Empty deps, relies on ref
 
   const startVoiceSession = async () => {
+    setErrorMessage(null);
+    setLiveStatus('connecting');
+    setIsLiveActive(true);
+    isLiveActiveRef.current = true;
+
     try {
-      setLiveStatus('connecting');
-      
+      // 1. Check for MediaDevices API
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Your browser does not support audio recording.");
+      }
+
+      // 2. Request Mic Permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
+      // 3. Setup Audio Context
       // Fix: Cast window to any to support webkitAudioContext for legacy Safari
       const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
       const audioCtx = new AudioCtx({ sampleRate: 16000 });
       audioContextRef.current = audioCtx;
       const outputCtx = new AudioCtx({ sampleRate: 24000 });
 
-      // Audio Analysis Setup for Visualizer
+      // 4. Setup Audio Graph
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
       analyserRef.current = analyser;
 
+      const source = audioCtx.createMediaStreamSource(stream);
+      sourceRef.current = source;
+      
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      source.connect(analyser);
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
+      // 5. Connect to Live API
       const liveClient = getLiveClient();
       
       const sessionPromise = liveClient.connect(connectLiveParams({
         onOpen: () => {
             setLiveStatus('connected');
-            setIsLiveActive(true);
-
-            const source = audioCtx.createMediaStreamSource(stream);
-            sourceRef.current = source;
-            
-            const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-            processorRef.current = processor;
-
-            // Connect Graph: Source -> Analyser -> Processor -> Destination
-            source.connect(analyser);
-            source.connect(processor);
-            processor.connect(audioCtx.destination);
-
-            processor.onaudioprocess = (e) => {
-                const inputData = e.inputBuffer.getChannelData(0);
-                const pcmBlob = createPcmBlob(inputData);
-                sessionPromise.then(session => session.sendRealtimeInput({ media: pcmBlob }));
-            };
+            // Note: Inputs are sent via processor event below
         },
         onMessage: async (msg) => {
+            // GUARD: If we stopped the session, ignore incoming messages
+            if (!isLiveActiveRef.current) return;
+
             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (audioData) {
-                const buffer = await decodeAudioData(base64ToUint8Array(audioData), outputCtx, 24000);
-                const source = outputCtx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(outputCtx.destination);
-                
-                const now = outputCtx.currentTime;
-                const start = Math.max(now, nextStartTimeRef.current);
-                source.start(start);
-                nextStartTimeRef.current = start + buffer.duration;
+                try {
+                  const buffer = await decodeAudioData(base64ToUint8Array(audioData), outputCtx, 24000);
+                  const source = outputCtx.createBufferSource();
+                  source.buffer = buffer;
+                  source.connect(outputCtx.destination);
+                  
+                  const now = outputCtx.currentTime;
+                  const start = Math.max(now, nextStartTimeRef.current);
+                  source.start(start);
+                  nextStartTimeRef.current = start + buffer.duration;
+                } catch (e) {
+                  console.error("Error decoding audio", e);
+                }
             }
         },
-        onClose: () => stopVoiceSession(),
+        onClose: () => {
+            console.log("Session closed remotely");
+            // Only stop if we haven't already stopped (avoid loops)
+            if (isLiveActiveRef.current) stopVoiceSession();
+        },
         onError: (e) => {
-            console.error(e);
-            stopVoiceSession();
+            console.error("Live API Error:", e);
+            if (isLiveActiveRef.current) {
+                setErrorMessage("Connection lost. Please try again.");
+                stopVoiceSession();
+            }
         }
       }, "You are NurtureAI, a warm, comforting, and highly knowledgeable parenting assistant. Speak naturally, concisely, and with empathy. Do not list huge lists of things, just give one or two pieces of advice at a time."));
       
-    } catch (err) {
+      // Store session for cleanup
+      sessionPromise.then(session => {
+          activeSessionRef.current = session;
+          
+          // Setup Audio Processor to send data
+          processor.onaudioprocess = (e) => {
+            if (!isLiveActiveRef.current) return;
+            const inputData = e.inputBuffer.getChannelData(0);
+            const pcmBlob = createPcmBlob(inputData);
+            session.sendRealtimeInput({ media: pcmBlob });
+          };
+      });
+
+    } catch (err: any) {
       console.error("Failed to start live session", err);
-      setLiveStatus('idle');
-      alert("Could not access microphone. Please ensure permissions are granted.");
+      stopVoiceSession(); // Ensure cleanup of anything partial
+      
+      if (err.name === 'NotAllowedError' || err.message?.includes('Permission denied')) {
+        setErrorMessage("Microphone access denied. Please allow microphone access in your browser settings.");
+      } else if (err.name === 'NotFoundError') {
+        setErrorMessage("No microphone found. Please connect a microphone.");
+      } else {
+        setErrorMessage(err.message || "Failed to connect. Please try again.");
+      }
     }
   };
 
   const stopVoiceSession = () => {
+    // Update State
     setIsLiveActive(false);
     setLiveStatus('idle');
+    isLiveActiveRef.current = false;
     
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    sourceRef.current?.disconnect();
-    processorRef.current?.disconnect();
-    analyserRef.current?.disconnect();
-    audioContextRef.current?.close();
+    // Stop Mic Stream
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+    }
+    
+    // Disconnect Nodes
+    try {
+        sourceRef.current?.disconnect();
+        processorRef.current?.disconnect();
+        analyserRef.current?.disconnect();
+        
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close();
+        }
+    } catch (e) {
+        console.error("Error closing audio context", e);
+    }
+
+    // Close Live Session
+    if (activeSessionRef.current) {
+        try {
+            activeSessionRef.current.close();
+            console.log("Live session closed locally");
+        } catch (e) {
+            console.error("Error closing live session", e);
+        }
+        activeSessionRef.current = null;
+    }
     
     // Reset audio pointer
     nextStartTimeRef.current = 0;
@@ -174,9 +241,9 @@ const ChatAssistant: React.FC = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (isLiveActive) stopVoiceSession();
+      stopVoiceSession();
     };
-  }, [isLiveActive]);
+  }, []);
 
 
   return (
@@ -200,8 +267,9 @@ const ChatAssistant: React.FC = () => {
         <div className="flex bg-white border border-slate-200 rounded-full p-1 shadow-sm">
           <button 
             onClick={() => {
-              if(isLiveActive) stopVoiceSession();
+              stopVoiceSession();
               setMode('voice');
+              setErrorMessage(null);
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
               mode === 'voice' 
@@ -213,7 +281,7 @@ const ChatAssistant: React.FC = () => {
           </button>
           <button 
             onClick={() => {
-              if(isLiveActive) stopVoiceSession();
+              stopVoiceSession();
               setMode('text');
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
@@ -238,6 +306,13 @@ const ChatAssistant: React.FC = () => {
           </div>
 
           <div className="z-10 flex flex-col items-center space-y-10">
+            
+            {errorMessage && (
+               <div className="absolute top-4 bg-red-50 text-red-600 px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 border border-red-100 animate-fade-in-up">
+                 <AlertCircle size={16} /> {errorMessage}
+               </div>
+            )}
+
             {/* Main Visualizer / Button */}
             <div className="relative group">
               {/* Ripple Effects when active */}
