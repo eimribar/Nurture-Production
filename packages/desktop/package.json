@@ -1,0 +1,31 @@
+{
+  "name": "@nurtureai/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "cap:sync": "cap sync @capacitor-community/electron",
+    "cap:open": "cap open @capacitor-community/electron",
+    "electron:dev": "npm run build && cap sync @capacitor-community/electron && cap open @capacitor-community/electron"
+  },
+  "dependencies": {
+    "@nurtureai/shared": "file:../shared",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor-community/electron": "^5.0.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

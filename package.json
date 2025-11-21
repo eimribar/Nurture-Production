@@ -1,24 +1,30 @@
 {
-  "name": "nurtureai---baby-cry-analyzer",
+  "name": "nurtureai-monorepo",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@google/genai": "^1.30.0",
-    "react-dom": "^19.2.0",
-    "react": "^19.2.0",
-    "lucide-react": "^0.554.0",
-    "recharts": "^3.4.1"
+    "dev:shared": "npm run dev --workspace=packages/shared",
+    "dev:mobile": "npm run dev --workspace=packages/mobile",
+    "dev:desktop": "npm run dev --workspace=packages/desktop",
+    "dev:backend": "npm run dev --workspace=packages/backend",
+    "build:shared": "npm run build --workspace=packages/shared",
+    "build:mobile": "npm run build --workspace=packages/mobile",
+    "build:desktop": "npm run build --workspace=packages/desktop",
+    "build:backend": "npm run build --workspace=packages/backend",
+    "build:all": "npm run build:shared && npm run build:backend && npm run build:mobile && npm run build:desktop",
+    "test": "npm run test --workspaces",
+    "clean": "rm -rf packages/*/node_modules packages/*/dist node_modules"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "typescript": "~5.8.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }

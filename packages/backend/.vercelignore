@@ -1,0 +1,22 @@
+# Environment files (set these in Vercel dashboard)
+.env
+.env.*
+
+# Development files
+node_modules
+src
+*.ts
+*.map
+
+# Test files
+*.test.js
+*.test.ts
+__tests__
+
+# Documentation
+README.md
+docs
+
+# Git
+.git
+.gitignore
