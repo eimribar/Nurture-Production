@@ -19,7 +19,7 @@ class SupabaseDB {
         name: user.name || null,
         created_at: user.createdAt.toISOString(),
         updated_at: user.updatedAt.toISOString(),
-      })
+      } as any)
       .select()
       .single();
 
@@ -75,7 +75,7 @@ class SupabaseDB {
     if (updates.passwordHash !== undefined) dbUpdates.password_hash = updates.passwordHash;
     if (updates.name !== undefined) dbUpdates.name = updates.name;
 
-    const { data, error } = await this.supabase
+    const { data, error } = await (this.supabase as any)
       .from('users')
       .update(dbUpdates)
       .eq('id', id)
@@ -108,7 +108,7 @@ class SupabaseDB {
         analysis_context: analysis.analysis.context,
         chart_data: analysis.analysis.probabilities,
         created_at: analysis.createdAt.toISOString(),
-      })
+      } as any)
       .select()
       .single();
 

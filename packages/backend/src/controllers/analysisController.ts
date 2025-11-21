@@ -85,14 +85,14 @@ Return a JSON response with:
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json() as any;
       throw new AppError(
         `Gemini API error: ${errorData.error?.message || 'Unknown error'}`,
         response.status
       );
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     // Parse JSON from response
@@ -160,7 +160,7 @@ Example: ["Tip 1", "Tip 2", "Tip 3"]`;
     console.log('[QuickTips] Response status:', response.status);
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json() as any;
       console.log('[QuickTips] Error data:', JSON.stringify(errorData));
       throw new AppError(
         `Gemini API error: ${errorData.error?.message || 'Unknown error'}`,
@@ -168,7 +168,7 @@ Example: ["Tip 1", "Tip 2", "Tip 3"]`;
       );
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     console.log('[QuickTips] Success! Got response');
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 

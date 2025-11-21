@@ -63,14 +63,14 @@ export async function sendChatMessage(
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json() as any;
       throw new AppError(
         `Gemini API error: ${errorData.error?.message || 'Unknown error'}`,
         response.status
       );
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     // Extract grounding metadata (search results)
