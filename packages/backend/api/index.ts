@@ -41,6 +41,21 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Logging
 app.use(morgan('combined'));
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'NurtureAI API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      analysis: '/api/analysis',
+      chat: '/api/chat',
+      history: '/api/history'
+    }
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
