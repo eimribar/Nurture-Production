@@ -135,9 +135,3 @@ export function getSupabaseClient(): SupabaseClient<Database> {
 
   return supabaseClient;
 }
-
-/**
- * Export a pre-initialized client for convenience
- * Note: This will throw if environment variables are not set
- */
-export const supabase = getSupabaseClient();
